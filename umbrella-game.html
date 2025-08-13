@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Umbrella Drop Game</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: linear-gradient(#77cbee, #eaf6fb);
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+    }
+    #ui {
+      position: absolute; top: 10px; left: 0; width: 100%;
+      display: flex; justify-content: space-around; align-items: center;
+      z-index: 2;
+    }
+    .ui-block {
+      background: rgba(255,255,255,0.75);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 1.2em;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #start-btn, #restart-btn {
+      position: absolute;
+      left: 50%; top: 55%;
+      transform: translate(-50%, -50%);
+      font-size: 1.5em;
+      padding: 18px 40px;
+      border: none;
+      border-radius: 25px;
+      background: #2ba9e7;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 10;
+    }
+    #game-over {
+      position: absolute;
+      left: 50%; top: 40%;
+      transform: translate(-50%, -50%);
+      font-size: 2.2em;
+      color: #2ba9e7;
+      background: rgba(255,255,255,0.93);
+      border-radius: 20px;
+      padding: 30px 50px;
+      z-index: 9;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="game-container">
+  <div id="ui">
+    <div class="ui-block" id="score">Score: 0</div>
+    <div class="ui-block" id="lives">Lives: 3</div>
+    <div class="ui-block" id="timer">Time: 60s</div>
+  </div>
+  <canvas id="game-canvas"></canvas>
+  <button id="start-btn">Start Game</button>
+  <div id="game-over"></div>
+  <button id="restart-btn" style="display:none">Restart</button>
+</div>
+<script>
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const timerEl = document.getElementById('timer');
+const startBtn = document.getElementById('start-btn');
+const restartBtn = document.getElementById('restart-btn');
+const gameOverEl = document.getElementById('game-over');
+let width = window.innerWidth, height = window.innerHeight;
+
+function resizeCanvas() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Game constants
+const UMBRELLA_W = 80, UMBRELLA_H = 50;
+const ITEM_SIZE = 36;
+const FALL_SPEED = { min: 3, max: 7 };
+const ITEM_TYPES = [
+  { type: "rain", score: 1, color: "#2ba9e7", emoji: "💧" },
+  { type: "coin", score: 5, color: "#ffda4a", emoji: "🪙" },
+  { type: "heart", score: 0, color: "#fd4d4d", emoji: "❤️", effect: "life" },
+  { type: "bolt", score: -1, color: "#ff7a00", emoji: "⚡", effect: "lose" },
+  { type: "mud", score: -3, color: "#a67c52", emoji: "💩", effect: "lose" },
+];
+const GAME_TIME = 60; // seconds
+const MAX_LIVES = 3;
+
+// Game state
+let umbrella, items, score, lives, timeLeft, running, spawnTimer;
+
+// Umbrella object
+function resetUmbrella() {
+  umbrella = {
+    x: width/2 - UMBRELLA_W/2,
+    y: height - UMBRELLA_H*2,
+    w: UMBRELLA_W,
+    h: UMBRELLA_H,
+    speed: Math.max(11, width/50),
+    targetX: null
+  };
+}
+function drawUmbrella() {
+  ctx.save();
+  ctx.translate(umbrella.x+umbrella.w/2, umbrella.y+umbrella.h/2);
+  // Canopy
+  ctx.beginPath();
+  ctx.arc(0, 0, umbrella.w/2, Math.PI, 2*Math.PI, false);
+  ctx.fillStyle = "#2ba9e7";
+  ctx.fill();
+  // Handle
+  ctx.beginPath();
+  ctx.moveTo(0, umbrella.h/2-3);
+  ctx.lineTo(0, umbrella.h/2+18);
+  ctx.arc(0, umbrella.h/2+18, 9, Math.PI*1.5, Math.PI*2, false);
+  ctx.strokeStyle = "#6c4e3f";
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Item object
+function spawnItem() {
+  const t = ITEM_TYPES[Math.floor(Math.random()*ITEM_TYPES.length)];
+  const x = Math.random()*(width-ITEM_SIZE-20) + 10;
+  const speed = Math.random()*(FALL_SPEED.max-FALL_SPEED.min)+FALL_SPEED.min;
+  items.push({
+    x, y: -ITEM_SIZE,
+    size: ITEM_SIZE,
+    type: t.type,
+    color: t.color,
+    emoji: t.emoji,
+    score: t.score,
+    effect: t.effect,
+    speed
+  });
+}
+
+// Game loop
+function update() {
+  if (!running) return;
+  // Move umbrella
+  if (umbrella.targetX !== null) {
+    let d = umbrella.targetX - umbrella.x;
+    umbrella.x += Math.sign(d) * Math.min(Math.abs(d), umbrella.speed);
+    // Snap if near
+    if (Math.abs(d) < umbrella.speed) umbrella.x = umbrella.targetX;
+  }
+  // Keyboard left/right
+  if (keys.left) umbrella.x -= umbrella.speed;
+  if (keys.right) umbrella.x += umbrella.speed;
+  // Clamp
+  umbrella.x = Math.max(0, Math.min(width-umbrella.w, umbrella.x));
+  // Move items
+  for (let i=items.length-1; i>=0; i--) {
+    let item = items[i];
+    item.y += item.speed;
+    // Collision
+    if (item.y+item.size > umbrella.y && item.x+item.size > umbrella.x && item.x < umbrella.x+umbrella.w && item.y < umbrella.y+umbrella.h) {
+      // Item caught!
+      if (item.type === "rain" || item.type === "coin") {
+        score += item.score;
+      } else if (item.type === "heart") {
+        lives = Math.min(MAX_LIVES, lives+1);
+      } else {
+        lives -= 1;
+        score += item.score;
+      }
+      items.splice(i,1);
+      continue;
+    }
+    // Missed
+    if (item.y > height+30) items.splice(i,1);
+  }
+  // Timer
+  timeLeft -= 1/60;
+  if (timeLeft <= 0 || lives <= 0) endGame();
+}
+
+function draw() {
+  ctx.clearRect(0,0,width,height);
+  drawUmbrella();
+  for (const item of items) {
+    ctx.save();
+    ctx.font = `${item.size}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(item.emoji, item.x + item.size/2, item.y);
+    ctx.restore();
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  scoreEl.textContent = "Score: " + score;
+  livesEl.textContent = "Lives: " + lives;
+  timerEl.textContent = "Time: " + Math.max(0, Math.floor(timeLeft)) + "s";
+  if (running) requestAnimationFrame(loop);
+}
+
+// Controls
+let keys = {left: false, right: false};
+document.addEventListener('keydown', e=>{
+  if (e.key==="ArrowLeft"||e.key==="a") keys.left=true;
+  if (e.key==="ArrowRight"||e.key==="d") keys.right=true;
+});
+document.addEventListener('keyup', e=>{
+  if (e.key==="ArrowLeft"||e.key==="a") keys.left=false;
+  if (e.key==="ArrowRight"||e.key==="d") keys.right=false;
+});
+canvas.addEventListener('touchstart', e=>{
+  if (!running) return;
+  const tx = e.touches[0].clientX;
+  umbrella.targetX = tx-umbrella.w/2;
+});
+canvas.addEventListener('touchmove', e=>{
+  if (!running) return;
+  const tx = e.touches[0].clientX;
+  umbrella.targetX = tx-umbrella.w/2;
+});
+canvas.addEventListener('touchend', e=>{
+  umbrella.targetX = null;
+});
+canvas.addEventListener('mousedown', e=>{
+  if (!running) return;
+  umbrella.targetX = e.clientX-umbrella.w/2;
+});
+canvas.addEventListener('mousemove', e=>{
+  if (!running) return;
+  if (e.buttons) umbrella.targetX = e.clientX-umbrella.w/2;
+});
+canvas.addEventListener('mouseup', e=>{
+  umbrella.targetX = null;
+});
+
+// Game start/end/reset
+function startGame() {
+  score = 0; lives = MAX_LIVES; timeLeft = GAME_TIME;
+  items = [];
+  running = true;
+  resetUmbrella();
+  gameOverEl.style.display = "none";
+  restartBtn.style.display = "none";
+  startBtn.style.display = "none";
+  spawnTimer = 0;
+  loop();
+  // Spawn items
+  itemSpawner();
+}
+function itemSpawner() {
+  if (!running) return;
+  spawnItem();
+  let delay = Math.max(400, 1200 - score*5);
+  setTimeout(itemSpawner, delay);
+}
+function endGame() {
+  running = false;
+  gameOverEl.innerHTML = `<div>Game Over!<br>Score: <b>${score}</b></div>`;
+  gameOverEl.style.display = "block";
+  restartBtn.style.display = "block";
+}
+startBtn.onclick = startGame;
+restartBtn.onclick = startGame;
+
+// Responsive umbrella
+function adjustSizes() {
+  umbrella.w = Math.max(60, width/7);
+  umbrella.h = umbrella.w/1.6;
+}
+window.addEventListener('resize', ()=>{
+  adjustSizes();
+  resetUmbrella();
+});
+adjustSizes();
+resetUmbrella();
+
+</script>
+</body>
+</html>
