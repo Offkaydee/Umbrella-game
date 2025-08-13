@@ -96,7 +96,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Game constants
+
 const UMBRELLA_W = 80, UMBRELLA_H = 50;
 const ITEM_SIZE = 36;
 const FALL_SPEED = { min: 3, max: 7 };
@@ -107,13 +107,12 @@ const ITEM_TYPES = [
   { type: "bolt", score: -1, color: "#ff7a00", emoji: "⚡", effect: "lose" },
   { type: "mud", score: -3, color: "#a67c52", emoji: "💩", effect: "lose" },
 ];
-const GAME_TIME = 60; // seconds
+const GAME_TIME = 60; 
 const MAX_LIVES = 3;
 
-// Game state
+
 let umbrella, items, score, lives, timeLeft, running, spawnTimer;
 
-// Umbrella object
 function resetUmbrella() {
   umbrella = {
     x: width/2 - UMBRELLA_W/2,
@@ -127,12 +126,12 @@ function resetUmbrella() {
 function drawUmbrella() {
   ctx.save();
   ctx.translate(umbrella.x+umbrella.w/2, umbrella.y+umbrella.h/2);
-  // Canopy
+  
   ctx.beginPath();
   ctx.arc(0, 0, umbrella.w/2, Math.PI, 2*Math.PI, false);
   ctx.fillStyle = "#2ba9e7";
   ctx.fill();
-  // Handle
+  
   ctx.beginPath();
   ctx.moveTo(0, umbrella.h/2-3);
   ctx.lineTo(0, umbrella.h/2+18);
@@ -143,7 +142,7 @@ function drawUmbrella() {
   ctx.restore();
 }
 
-// Item object
+
 function spawnItem() {
   const t = ITEM_TYPES[Math.floor(Math.random()*ITEM_TYPES.length)];
   const x = Math.random()*(width-ITEM_SIZE-20) + 10;
@@ -160,28 +159,28 @@ function spawnItem() {
   });
 }
 
-// Game loop
+
 function update() {
   if (!running) return;
-  // Move umbrella
+ 
   if (umbrella.targetX !== null) {
     let d = umbrella.targetX - umbrella.x;
     umbrella.x += Math.sign(d) * Math.min(Math.abs(d), umbrella.speed);
-    // Snap if near
+    
     if (Math.abs(d) < umbrella.speed) umbrella.x = umbrella.targetX;
   }
-  // Keyboard left/right
+  
   if (keys.left) umbrella.x -= umbrella.speed;
   if (keys.right) umbrella.x += umbrella.speed;
-  // Clamp
+  
   umbrella.x = Math.max(0, Math.min(width-umbrella.w, umbrella.x));
-  // Move items
+ 
   for (let i=items.length-1; i>=0; i--) {
     let item = items[i];
     item.y += item.speed;
-    // Collision
+    
     if (item.y+item.size > umbrella.y && item.x+item.size > umbrella.x && item.x < umbrella.x+umbrella.w && item.y < umbrella.y+umbrella.h) {
-      // Item caught!
+      
       if (item.type === "rain" || item.type === "coin") {
         score += item.score;
       } else if (item.type === "heart") {
@@ -193,10 +192,10 @@ function update() {
       items.splice(i,1);
       continue;
     }
-    // Missed
+ 
     if (item.y > height+30) items.splice(i,1);
   }
-  // Timer
+  
   timeLeft -= 1/60;
   if (timeLeft <= 0 || lives <= 0) endGame();
 }
@@ -223,7 +222,7 @@ function loop() {
   if (running) requestAnimationFrame(loop);
 }
 
-// Controls
+
 let keys = {left: false, right: false};
 document.addEventListener('keydown', e=>{
   if (e.key==="ArrowLeft"||e.key==="a") keys.left=true;
@@ -269,7 +268,7 @@ function startGame() {
   startBtn.style.display = "none";
   spawnTimer = 0;
   loop();
-  // Spawn items
+  
   itemSpawner();
 }
 function itemSpawner() {
@@ -287,7 +286,7 @@ function endGame() {
 startBtn.onclick = startGame;
 restartBtn.onclick = startGame;
 
-// Responsive umbrella
+
 function adjustSizes() {
   umbrella.w = Math.max(60, width/7);
   umbrella.h = umbrella.w/1.6;
