@@ -9,6 +9,8 @@ DO's
   3. hearts
   
 DONT'S
-  1. avoid bolts and poop (mud)
+  1. avoid poop (mud)
 
-NB: score as much as possible
+NB:
+  1. Bolts increases game speed
+  2. score as much as possible
